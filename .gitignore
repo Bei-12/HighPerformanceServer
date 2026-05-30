@@ -1,0 +1,15 @@
+# 日志文件
+*.log
+
+# 日志目录
+logs/
+
+# FIFO目录
+fifo/
+
+# 编译生成的可执行程序
+Shadow_Process_Collections/Process_LOG/Log
+
+# 编译中间文件
+*.o
+*.out
