@@ -16,10 +16,12 @@ class UdpServer
 public:
     // 创建Socket
     UdpServer(int port = 8080, string address = "127.0.0.1")
-        : port_(port), address_(address)
+        : port_(port), address_(address), sockfd_(-1)
     {
         memset((void *)&server_, 0, sizeof(server_));
         memset((void *)&client_, 0, sizeof(client_));
+        rec_buffer_[0] = 0;
+        send_buffer_[0] = 0;
     }
 
     void Init()
@@ -28,6 +30,7 @@ public:
         if (sockfd_ < 0)
         {
             cout << "Socket Create failed, error message:" << strerror(errno) << endl;
+            exit(1);
         }
 
         // 绑定地址
@@ -45,45 +48,56 @@ public:
     // 得到client地址
     void Receive()
     {
-        char buffer[4096];
-        buffer[0] = 0;
+        rec_buffer_[0] = 0;
         socklen_t len = (socklen_t)sizeof(client_);
-        ssize_t ret = recvfrom(sockfd_, buffer, sizeof(buffer), 0, (sockaddr *)&client_, &len);
-        if(ret < 0)
+        ssize_t ret = recvfrom(sockfd_, rec_buffer_, sizeof(rec_buffer_), 0, (sockaddr *)&client_, &len);
+        if (ret < 0)
         {
             cout << "recvfrom failed " << endl;
             return;
         }
-        cout << "Message from client #:" << buffer << endl;
+        cout << "Message from client #:" << rec_buffer_ << endl;
     }
 
     // 发送数据
     void Send()
     {
-        char buffer[4096];
-        buffer[0] = 0;
+        send_buffer_[0] = 0;
         cout << "Enter Message#:  ";
-        cin >> buffer;
-        ssize_t mes = sendto(sockfd_, buffer, strlen(buffer), 0, (struct sockaddr *)&client_, (socklen_t)sizeof(client_));
+        cin >> send_buffer_;
+        ssize_t mes = sendto(sockfd_, send_buffer_, strlen(send_buffer_), 0, (struct sockaddr *)&client_, (socklen_t)sizeof(client_));
+        if (mes <= 0)
+        {
+            cout << "Send Failed" << endl;
+            return;
+        }
     }
 
     void Run()
     {
-        while(true)
+        while (true)
         {
             Receive();
+            if (strcmp(rec_buffer_, "quit") == 0)
+            {
+                cout << "Server Exit" << endl;
+                break;
+            }
             Send();
         }
     }
 
     ~UdpServer()
     {
-        close(sockfd_);
+        if(sockfd_ >= 0)
+            close(sockfd_);
     }
 
 private:
     int sockfd_;
     int port_;
+    char send_buffer_[4096];
+    char rec_buffer_[4096];
     string address_;
     struct sockaddr_in client_;
     struct sockaddr_in server_;

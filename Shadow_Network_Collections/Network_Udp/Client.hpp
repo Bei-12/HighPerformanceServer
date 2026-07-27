@@ -13,10 +13,12 @@ class UdpClient
 {
 public:
     UdpClient(int port = 8080, string address = "127.0.0.1")
-        : port_(port), address_(address)
+        : port_(port), address_(address), sockfd_(-1)
     {
         memset((void *)&server_, 0, sizeof(server_));
         memset((void *)&peer_, 0, sizeof(peer_));
+        send_buffer_[0] = 0;
+        rec_buffer_[0] = 0;
     }
 
     void Init()
@@ -35,12 +37,12 @@ public:
 
     void Send()
     {
-        // sedto
-        char buffer[4096];
-        cout << "Enter Message#:";
-        cin >> buffer;
-        ssize_t mes = sendto(sockfd_, buffer, strlen(buffer), 0, (sockaddr *)&server_, (socklen_t)sizeof(server_));
-        if (mes < 0)
+        // sendto
+        send_buffer_[0] = 0;
+        cout << "Enter Message#: ";
+        cin >> send_buffer_;
+        ssize_t ret = sendto(sockfd_, send_buffer_, strlen(send_buffer_), 0, (sockaddr *)&server_, (socklen_t)sizeof(server_));
+        if (ret < 0)
         {
             cout << "Send Failed" << endl;
             return;
@@ -50,11 +52,15 @@ public:
     // 接收数据
     void Receive()
     {
-        char buffer[4096];
-        buffer[0] = 0;
+        rec_buffer_[0] = 0;
         socklen_t len = (socklen_t)sizeof(peer_);
-        int mes = recvfrom(sockfd_, buffer, sizeof(buffer), 0, (struct sockaddr *)&peer_, &len);
-        cout << "Message from server#:  " << buffer << endl;
+        ssize_t ret = recvfrom(sockfd_, rec_buffer_, sizeof(rec_buffer_), 0, (struct sockaddr *)&peer_, &len);
+        if (ret <= 0)
+        {
+            cout << "Receive Failed" << endl;
+            return;
+        }
+        cout << "Message from server#: " << rec_buffer_ << endl;
     }
 
     void Run()
@@ -62,19 +68,27 @@ public:
         while (true)
         {
             Send();
+            if (strcmp(send_buffer_, "quit") == 0)
+            {
+                cout << "Client Exit" << endl;
+                break;
+            }
             Receive();
         }
     }
 
     ~UdpClient()
     {
-        close(sockfd_);
+        if(sockfd_ >= 0)
+            close(sockfd_);
     }
 
 private:
     int port_;
     int sockfd_;
     string address_;
+    char send_buffer_[4096];
+    char rec_buffer_[4096];
     struct sockaddr_in server_;
     struct sockaddr_in peer_;
 };
