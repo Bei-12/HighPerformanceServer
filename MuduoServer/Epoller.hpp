@@ -15,7 +15,7 @@
 
 #include "Channel.hpp"
 
-#define NUM 64
+#define NUM 128
 
 using namespace std;
 
@@ -51,7 +51,7 @@ public:
     int EpollWait() // 等待事件，并把发生的事件放入events 一组事件
     {
         // -1 --- 没有事件就一直堵塞
-        cout << "Epoll wait 前" << endl;
+        // cout << "Epoll wait 前" << endl;
         while (true)
         {
             int ret = epoll_wait(epfd_, events_, NUM, -1);

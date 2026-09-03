@@ -21,10 +21,8 @@
 
 using namespace std;
 
-#define Port 8080
-#define Address "127.0.0.1"
 #define SIZE 4096
-#define NUM 64
+#define NUM 128
 
 enum ConnectionState // 这个TCP连接现在是否还允许继续处理业务
 {
@@ -67,7 +65,7 @@ public:
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK) // 停止读取，回到epoll_wait
             {
-                cout << "数据读取完毕" << endl;
+                // cout << "数据读取完毕" << endl;
                 return AGAIN;
             }
             else if (errno == EINTR)
@@ -77,13 +75,13 @@ public:
             }
             else
             {
-                cout << "Mistake message: " << strerror(errno) << endl;
+                // cout << "Mistake message: " << strerror(errno) << endl;
                 return ERROR;
             }
         }
         else if (ret == 0) // 对端关闭
         {
-            cout << "Client close" << endl;
+            // cout << "Client close" << endl;
             return CLOSE;
         }
         input_buffer_.Append(rec_buffer_, ret);
@@ -95,7 +93,7 @@ public:
         if (output_buffer_.Empty())
             return DATA;
         ssize_t ret = send(fd_, output_buffer_.GetString().c_str(), output_buffer_.Size(), 0);
-        cout << "send ret: " << ret;
+        // cout << "send ret: " << ret;
         if (ret < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -139,9 +137,36 @@ public:
         }
     }
 
+    const char *ReasonToString(CloseReason reason)
+    {
+        switch (reason)
+        {
+        case RECV_ZERO:
+            return "RECV_ZERO";
+
+        case RECV_FATAL_ERROR:
+            return "RECV_FATAL_ERROR";
+
+        case SEND_FATAL_ERROR:
+            return "SEND_FATAL_ERROR";
+
+        case CHANNEL_HUP:
+            return "EPOLLHUP";
+
+        case CHANNEL_ERROR:
+            return "EPOLLERR";
+
+        case CHANNEL_RDHUP:
+            return "EPOLLRDHUP";
+
+        default:
+            return "UNKNOWN";
+        }
+    }
+
     void Business()
     {
-        output_buffer_.Append("Server received --- ");
+        // output_buffer_.Append("Server received --- ");
         output_buffer_.Append(input_buffer_.GetString());
         Clear();
     }
@@ -156,17 +181,20 @@ public:
 
     void CloseCall()
     {
-        auto close = [this]
-        {
-            this->CloseHandler();
-        };
-        channel_.SetCloseCallback(close);
+        channel_.SetCloseCallback([this](CloseReason reason)
+                                  { this->CloseHandler(reason); });
     }
 
-    void CloseHandler() // 通知TcpServer fd应该删除
+    void CloseHandler(CloseReason reason) // 通知TcpServer fd应该删除
     {
         if (state_ == CONNECTED)
         {
+            // cout << "[SERVER CLOSE]"
+            //      << " fd=" << fd_
+            //      << " reason=" << ReasonToString(reason)
+            //      << " input=" << input_buffer_.Size()
+            //      << " output=" << output_buffer_.Size()
+            //      << endl;
             SetState(CLOSING);
             TriggerClose(fd_);
         }
@@ -196,11 +224,17 @@ public:
                     // 循环接受数据
                     continue;
                 case CLOSE:
-                    CloseHandler();
+                    // cout << "[RECV ZERO]"
+                    //      << " fd=" << fd_
+                    //      << " input=" << input_buffer_.Size()
+                    //      << " output=" << output_buffer_.Size()
+                    //      << endl;
+                    CloseHandler(RECV_ZERO);
                     return; // 关闭连接，退出，结束fd处理
                 case ERROR:
-                    cout << "Error message: " << strerror(errno) << endl;
-                    CloseHandler();
+                    // cout << "Error message: " << strerror(errno) << endl;
+                    CloseHandler(RECV_FATAL_ERROR);
+                    // cout << "[RECV ERROR]" << " fd=" << fd_ << " errno=" << errno << " " << strerror(errno) << endl;
                     return;
                 case AGAIN:
                     flag = true;
@@ -270,15 +304,15 @@ public:
                     flag = true;
                     break;
                 case CLOSE:
-                    CloseHandler();
+                    CloseHandler(WRITE_ZERO);
                     return;
                 case DATA: // 表示数据发送完成
                     // 告诉Channel，然后Channel来调用epoller来更改事件状态
                     channel_.DisableWrite();
                     return;
                 case ERROR:
-                    cout << "Error message: " << strerror(errno) << endl;
-                    CloseHandler();
+                    // cout << "[SEND ERROR]" << " fd=" << fd_ << " errno=" << errno << " " << strerror(errno) << " output=" << output_buffer_.Size() << endl;
+                    CloseHandler(SEND_FATAL_ERROR);
                     return;
                 case RETRY:
                     continue;
@@ -289,7 +323,7 @@ public:
             else
                 break;
         }
-        cout << "Message send to client#: " << input_buffer_.GetString() << endl;
+        // cout << "Message send to client#: " << input_buffer_.GetString() << endl;
         return;
     }
 

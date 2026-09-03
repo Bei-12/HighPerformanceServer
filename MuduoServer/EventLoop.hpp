@@ -59,17 +59,16 @@ public:
     // 如果EventLoop此刻阻塞在epoll_wait，怎么把它叫醒
     void Loop()
     {
-        cout << "Loop start" << endl;
+        // cout << "Loop start" << endl;
         running_ = true;
         while (running_)
         {
             Distribute();
             // 停止更改状态的部分
-            // TODO
             if (cleanup_)
                 cleanup_();
         }
-        cout << "Loop End" << endl;
+        // cout << "Loop End" << endl;
     }
 
     void Quit()
@@ -94,7 +93,7 @@ public:
     void WakeUp()
     {
         // write wakefd_;
-        cout << "WakeUp write 成功" << endl;
+        // cout << "WakeUp write 成功" << endl;
         while (true)
         {
             uint64_t one = 1;
@@ -120,7 +119,7 @@ public:
     void WakeUpHandler()
     {
         // read wakefd_
-        cout << "WakeHandler调用成功" << endl;
+        // cout << "WakeHandler调用成功" << endl;
         while (true)
         {
             uint64_t value;

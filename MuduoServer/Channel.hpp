@@ -10,12 +10,12 @@
 #pragma once
 
 #include <iostream>
+#include <cstring>
 #include <functional>
 #include <unordered_map>
 #include <vector>
 #include <sys/epoll.h>
-
-#define NUM 64
+#include <sys/socket.h>
 
 using namespace std;
 
@@ -24,6 +24,17 @@ enum ChannelState
     NEW = 100,
     ADDED = 200,
     DELETED = 300
+};
+
+enum CloseReason
+{
+    RECV_ZERO,
+    WRITE_ZERO,
+    RECV_FATAL_ERROR,
+    SEND_FATAL_ERROR,
+    CHANNEL_HUP,
+    CHANNEL_ERROR,
+    CHANNEL_RDHUP
 };
 
 class Channel
@@ -37,7 +48,7 @@ public:
     Channel(int fd)
         : fd_(fd), events_(0), revents_(0), state_(NEW)
     {
-        cout << "Channel fd: " << fd << endl;
+        // cout << "Channel fd: " << fd << endl;
     }
 
     void HandlerEvent()
@@ -58,17 +69,21 @@ public:
         if (revents_ & EPOLLHUP) // 可能会有数据
         {
             if (closecallback_)
-                closecallback_();
+                closecallback_(CHANNEL_HUP);
         }
         if (revents_ & EPOLLERR)
         {
-            if(closecallback_)
-                closecallback_();
+            int error = 0;
+            socklen_t len = sizeof(error);
+            getsockopt(fd_, SOL_SOCKET, SO_ERROR, &error, &len);
+            // cout << "[CHANNEL EPOLLERR]" << " fd=" << fd_ << " SO_ERROR=" << error << " " << strerror(error) << endl;
+            if (closecallback_)
+                closecallback_(CHANNEL_ERROR);
         }
-        if(revents_ & EPOLLRDHUP)
+        if (revents_ & EPOLLRDHUP)
         {
-            if(closecallback_)
-                closecallback_();
+            if (closecallback_)
+                closecallback_(CHANNEL_RDHUP);
         }
     }
 
@@ -77,7 +92,7 @@ public:
         fd_ = listenfd;
     }
 
-    void SetCloseCallback(function<void()> close)
+    void SetCloseCallback(function<void(CloseReason)> close)
     {
         closecallback_ = close;
     }
@@ -157,7 +172,7 @@ private:
     int state_;
     uint32_t events_;  // 希望内核监听什么
     uint32_t revents_; // 由Epoller来设置
-    function<void()> closecallback_;
+    function<void(CloseReason)> closecallback_;
     function<void()> readcallback_;
     function<void(Channel *)> updatecallback_; // 只起一个通知的作用
     function<void()> writecallback_;

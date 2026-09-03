@@ -129,20 +129,43 @@ public:
             int clientfd_ = accept(listenfd_, (struct sockaddr *)&client_, &len);
             if (clientfd_ < 0)
             {
-                if (errno == EAGAIN)
+                if (errno == EAGAIN || errno == EWOULDBLOCK) // 说明当前accept队列真的空了
                 {
+                    // cout << "EAGAIN ";
                     return -1;
+                }
+                else if (errno == EINTR) // 只是系统调用被信号打断
+                {
+                    cout << "EINTR" << endl;
+                    continue;
+                }
+                else if (errno == ECONNABORTED) // 某一个连接在accept前异常终止
+                {
+                    cout << "ECNNABORTED" << endl;
+                    continue;
                 }
                 else
                 {
                     cout << "Accept Failed" << errno << "errno Message:" << strerror(errno) << endl;
-                    exit(1);
+                    return -1;
                 }
             }
 
             // 设置非阻塞
             int flag = fcntl(clientfd_, F_GETFL);
-            fcntl(clientfd_, F_SETFL, flag | O_NONBLOCK);
+            if (flag < 0)
+            {
+                cout << "Get nonblocking failed" << endl;
+                close(clientfd_);
+                return -1;
+            }
+            int ret = fcntl(clientfd_, F_SETFL, flag | O_NONBLOCK);
+            if (ret < 0)
+            {
+                cout << "Set nonblocking failed" << endl;
+                close(clientfd_);
+                return -1;
+            }
 
             // 创建TCPConnection
             AddTcpConnection(clientfd_);
